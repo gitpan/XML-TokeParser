@@ -5,7 +5,7 @@ use vars qw($VERSION);
 use Carp;
 use XML::Parser;
 
-$VERSION = '0.01';
+$VERSION = '0.02';
 
 sub new {
   my $class=shift;
@@ -59,7 +59,7 @@ sub get_token {
 
 sub unget_token {
   my $self=shift;
-  push @{$self->{output}},@_;
+  unshift @{$self->{output}},@_;
 }
 
 sub get_tag {
