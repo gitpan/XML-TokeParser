@@ -5,7 +5,7 @@ use vars qw($VERSION);
 use Carp;
 use XML::Parser;
 
-$VERSION = '0.03';
+$VERSION = '0.04';
 
 sub new {
   my $class=shift;
@@ -42,7 +42,7 @@ sub new {
 
 sub DESTROY {
   my $self=shift;
-  $self->{srcfile}->close() if $self->{opened};
+  $self->{srcfile}->close() if $self->{srcfile} && $self->{opened};
   $self->{parser}=undef;
 }
 
@@ -55,7 +55,7 @@ sub get_token {
     $self->parsechunks();
     $token=shift @{$self->{output}};
   }
-  if (exists $self->{savebuff}) {
+  if (defined $token and exists $self->{savebuff}) {
     push @{$self->{savebuff}},[@$token];
   }
   $token;

@@ -10,4 +10,6 @@ Revision history for Perl extension XML::TokeParser.
         - fixed bug causing warning when reaching the end of XML passed
           in as string reference
         - fixed bug preventing Latin conversion for tag and attribute names
+0.04  Sat Jul 20 00:10:00 2001
+	- fixed bugs causing warnings under some circumstances
 
