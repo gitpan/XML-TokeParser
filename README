@@ -1,0 +1,213 @@
+=head1 NAME
+
+XML::TokeParser - Simplified interface to XML::Parser
+
+=head1 SYNOPSIS
+
+  use XML::TokeParser;
+
+  #parse from file
+  my $p=XML::TokeParser->new('file.xml')
+
+  #parse from open handle
+  open IN,'file.xml' or die $!;
+  my $p=XML::TokeParser->new(\*IN,Noempty=>1);
+
+  #parse literal text
+  my $text='<tag xmlns="http://www.omsdev.com">text</tag>';
+  my $p=XML::TokeParser->new(\$text,Namespaces=>1);
+
+  #read next token
+  my $token=$p->get_token();
+
+  #skip to <title> and read text
+  $p->get_tag('title');
+  $p->get_text();
+
+  #read text of next <para>, ignoring any internal markup
+  $p->get_tag('para');
+  $p->get_trimmed_text('/para');
+
+
+=head1 DESCRIPTION
+
+XML::TokeParser provides a procedural ("pull mode") interface to XML::Parser
+in much the same way that Gisle Aas' HTML::TokeParser provides a procedural
+interface to HTML::Parser.  XML::TokeParser splits its XML input up into
+"tokens," each corresponding to an XML::Parser event.
+
+A token is a reference to an array whose first element is an event-type 
+string and whose last element is the literal text of the XML input that 
+generated the event, with intermediate elements varying according to the 
+event type:
+
+=over 4
+
+=item Start tag
+
+The token has five elements: 'S', the element's name, a reference to a hash 
+of attribute values keyed by attribute names, a reference to an array of 
+attribute names in the order in which they appeared in the tag, and the 
+literal text.
+
+=item End tag
+
+The token has three elements: 'E', the element's name, and the literal text.
+
+=item Character data (text)
+
+The token has three elements: 'T', the parsed text, and the literal text.  
+All contiguous runs of text are gathered into single tokens; there will 
+never be two 'T' tokens in a row.
+
+=item Comment
+
+The token has three elements: 'C', the parsed text of the comment, and the 
+literal text.
+
+=item Processing instruction
+
+The token has four elements: 'PI', the target, the data, and the literal 
+text.
+
+=back
+
+The literal text includes any markup delimiters (pointy brackets, 
+<![CDATA[, etc.), entity references, and numeric character references and 
+is in the XML document's original character encoding.  All other text is in 
+UTF-8 (unless the Latin option is set, in which case it's in ISO-8859-1) 
+regardless of the original encoding, and all entity and character 
+references are expanded.
+
+If the Namespaces option is set, element and attribute names are prefixed 
+by their (possibly empty) namespace URIs enclosed in curly brackets and 
+xmlns:* attributes do not appear in 'S' tokens.
+
+=head1 METHODS
+
+=over 4
+
+=item $p = XML::TokeParser->new($input, [options])
+
+Creates a new parser, specifying the input source and any options.  If 
+$input is a string, it is the name of the file to parse.  If $input is a 
+reference to a string, that string is the actual text to parse.  If $input 
+is a reference to a typeglob or an IO::Handle object corresponding to an 
+open file or socket, the text read from the handle will be parsed.
+
+Options are name=>value pairs and can be any of the following:
+
+=over 4
+
+=item Namespaces
+
+If set to a true value, namespace processing is enabled.
+
+=item ParseParamEnt
+
+This option is passed on to the underlying XML::Parser object; see that 
+module's documentation for details.
+
+=item Noempty
+
+If set to a true value, text tokens consisting of only whitespace (such as 
+those created by indentation and line breaks in between tags) will be 
+ignored.
+
+=item Latin
+
+If set to a true value, all text other than the literal text elements of 
+tokens will be translated into the ISO 8859-1 (Latin-1) character encoding 
+rather than the normal UTF-8 encoding.
+
+=item Catalog
+
+The value is the URI of a catalog file used to resolve PUBLIC and SYSTEM 
+identifiers.  See XML::Catalog for details.
+
+=back
+
+=item $token = $p->get_token()
+
+Returns the next token, as an array reference, from the input.  Returns 
+undef if there are no remaining tokens.
+
+=item $p->unget_token($token,...)
+
+Pushes tokens back so they will be re-read.  Useful if you've read one or 
+more tokens to far.
+
+=item $token = $p->get_tag( [$token] )
+
+If no argument given, skips tokens until the next start tag or end tag 
+token. If an argument is given, skips tokens until the start tag or end tag 
+(if the argument begins with '/') for the named element.  The returned 
+token does not include an event type code; its first element is the element 
+name, prefixed by a '/' if the token is for an end tag.
+
+=item $text = $p->get_text( [$token] )
+
+If no argument given, returns the text at the current position, or an empty 
+string if the next token is not a 'T' token.  If an argument is given, 
+gathers up all text between the current position and the specified start or 
+end tag, stripping out any intervening tags (much like the way a typical 
+Web browser deals with unknown tags).
+
+=item $text = $p->get_trimmed_text( [$token])
+
+Like get_text(), but deletes any leading or trailing whitespaces and 
+collapses multiple whitespace (including newlines) into single spaces.
+
+=back
+
+=head1 DIFFERENCES FROM HTML::TokeParser
+
+Uses a true XML parser rather than a modified HTML parser.
+
+Text and comment tokens include extracted text as well as literal text.
+
+PI tokens include target and data as well as literal text.
+
+No tokens for declarations.
+
+No "textify" hash.
+
+=head1 EXAMPLES
+
+=head2 Print method signatures from the XML version of this PODpage
+
+  #!/usr/bin/perl -w
+  use strict;
+  use XML::TokeParser;
+  my $t;
+  my $p=XML::TokeParser->new('tokeparser.xml',Noempty=>1) or die $!;
+  while ($p->get_tag('title') && $p->get_text('/title') ne 'METHODS') {
+    ;
+  }
+  $p->get_tag('list');
+  while (($t=$p->get_tag()->[0]) ne '/list') {
+    if ($t eq 'item') {
+      $p->get_tag('itemtext');
+      print $p->get_text('/itemtext'),"\n";
+      $p->get_tag('/item');
+    }
+    else {
+      $p->get_tag('/list');  # assumes no nesting here!
+    }
+  }
+
+=head1 AUTHOR
+
+Eric Bohlman (ebohlman@omsdev.com)
+
+Copyright (c) 2001 Eric Bohlman. All rights reserved. This program
+is free software; you can redistribute it and/or modify it under the same
+terms as Perl itself.
+
+=head1 SEE ALSO
+
+  XML::Parser
+  XML::Catalog
+  HTML::TokeParser
+
+=cut
