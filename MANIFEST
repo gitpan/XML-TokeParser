@@ -1,9 +1,10 @@
 Changes
 Makefile.PL
 MANIFEST
-test.pl
 TokeParser.pm
 README
-printmethods.pl
+TODO
 TokeParser.xml
-
+t/1.normal.t
+t/2.extended.t
+META.yml                                Module meta-data (added by MakeMaker)

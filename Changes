@@ -13,3 +13,28 @@ Revision history for Perl extension XML::TokeParser.
 0.04  Sat Jul 20 00:10:00 2001
 	- fixed bugs causing warnings under some circumstances
 
+0.05  Sun Jun  8 08:08:25 2003
+    - PODMASTER takes over maintenance (with original authors "blessing")
+        and makes all tokens of type XML::TokeParser::Token
+        with the following methods:
+
+            is_text
+            is_comment
+            is_pi which is short for is_process_instruction
+            is_start_tag
+            is_end_tag
+            is_tag
+
+            target
+            data
+            raw
+            attr
+            attrseq
+            tag
+            text
+
+        ** WARNING: The tokens will probably change
+        as per http://perlmonks.com/index.pl?node_id=264094
+        which shouldn't affect how you use them.
+
+    - more tests, more pod, added TODO
