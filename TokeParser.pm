@@ -5,7 +5,7 @@ use vars qw($VERSION);
 use Carp;
 use XML::Parser;
 
-$VERSION = '0.02';
+$VERSION = '0.03';
 
 sub new {
   my $class=shift;
@@ -47,6 +47,7 @@ sub DESTROY {
 }
 
 sub get_token {
+  local $_;
   my $self=shift;
   $self->parsechunks();
   my $token=shift @{$self->{output}};
@@ -54,12 +55,23 @@ sub get_token {
     $self->parsechunks();
     $token=shift @{$self->{output}};
   }
+  if (exists $self->{savebuff}) {
+    push @{$self->{savebuff}},[@$token];
+  }
   $token;
 }
 
 sub unget_token {
   my $self=shift;
-  unshift @{$self->{output}},@_;
+  while (my $token=pop @_) {
+    if (@$token==4 && ref($token->[1]) eq 'HASH') {
+      $token=['S',@$token];
+    }
+    elsif (@$token==2 && substr($token->[0],0,1) eq '/') {
+      $token=['E',substr($token->[0],1),$token->[1]];
+    }
+    unshift @{$self->{output}},$token;
+  }
 }
 
 sub get_tag {
@@ -92,7 +104,10 @@ sub get_text {
       last;
     }
   }
-  $self->unget_token($token) if $token;
+  if ($token) {
+    $self->unget_token($token);
+    pop @{$self->{savebuff}} if exists $self->{savebuff};
+  }
   $text;
 }
 
@@ -105,15 +120,36 @@ sub get_trimmed_text {
   $text;
 }
 
+sub begin_saving {
+  my $self=shift;
+  delete $self->{savebuff} if exists $self->{savebuff};
+  $self->{savebuff}=[];
+  push @{$self->{savebuff}},@_ if @_;
+}
+
+sub restore_saved {
+  my $self=shift;
+  if (exists $self->{savebuff}) {
+    $self->unget_token(@{$self->{savebuff}});
+    delete $self->{savebuff};
+  }
+}
+
 sub parsechunks {
   my ($self)=@_;
-  my $buf;
+  my $buf='';
   while (
       (!@{$self->{output}} || $self->{output}[-1][0] eq 'T')
       && !$self->{EOF}) {
-    if (exists $self->{src}) {
-      $buf=substr(${$self->{src}},$self->{src_offset},4096);
-      $self->{src_offset}+=4096;
+#    if (defined($self->{src}) && ($self->{src_offset}<length(${$self->{src}}))) {
+#      $buf=substr(${$self->{src}},$self->{src_offset},4096);
+#      $self->{src_offset}+=4096;
+#    }
+    if (defined($self->{src})) {
+      if ($self->{src_offset}<length(${$self->{src}})) {
+        $buf=substr(${$self->{src}},$self->{src_offset},4096);
+        $self->{src_offset}+=4096;
+      }
     }
     else {
       read($self->{srcfile},$buf,4096);
@@ -232,6 +268,14 @@ XML::TokeParser - Simplified interface to XML::Parser
   $p->get_tag('para');
   $p->get_trimmed_text('/para');
 
+  #process <para> if interesting text
+  $t=$p->get_tag('para');
+  $p->begin_saving($t);
+  if ($p->get_trimmed_text('/para') =~ /interesting stuff/) {
+    $p->restore_saved();
+    process_para($p);
+  }
+
 
 =head1 DESCRIPTION
 
@@ -339,7 +383,8 @@ undef if there are no remaining tokens.
 =item $p->unget_token($token,...)
 
 Pushes tokens back so they will be re-read.  Useful if you've read one or 
-more tokens to far.
+more tokens too far.  Correctly handles "partial" tokens returned by 
+get_tag(). 
 
 =item $token = $p->get_tag( [$token] )
 
@@ -357,10 +402,26 @@ gathers up all text between the current position and the specified start or
 end tag, stripping out any intervening tags (much like the way a typical 
 Web browser deals with unknown tags).
 
-=item $text = $p->get_trimmed_text( [$token])
+=item $text = $p->get_trimmed_text( [$token] )
 
 Like get_text(), but deletes any leading or trailing whitespaces and 
 collapses multiple whitespace (including newlines) into single spaces.
+
+=item $p->begin_saving( [$token] ) 
+
+Causes subsequent calls to get_token(), get_tag(), get_text(), and 
+get_trimmed_text() to save the returned tokens.  In conjunction with 
+restore_saved(), allows you to "back up" within a token stream.  If an 
+argument is supplied, it is placed at the beginning of the list of saved 
+tokens (useful because you often won't know you want to begin saving until 
+you've already read the first token you want saved).
+
+=item $p->restore_saved()
+
+Pushes all the tokens saved by begin_saving() back onto the token stream.  
+Stops saving tokens.  To cancel saving without backing up, call 
+begin_saving() and restore_saved() in succession.
+
 
 =back
 
@@ -375,6 +436,10 @@ PI tokens include target and data as well as literal text.
 No tokens for declarations.
 
 No "textify" hash.
+
+unget_token correctly handles partial tokens returned by get_tag().
+
+begin_saving() and restore_saved()
 
 =head1 EXAMPLES
 
